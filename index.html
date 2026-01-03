@@ -450,7 +450,7 @@
             try {
               const res = await fetch(API_URL);
               const data = await res.json();
-              items.value = data.reverse(); // 新的在前面
+              items.value = data;
             } catch (e) {
               alert("讀取失敗，請檢查網路或 API");
               console.error(e);
