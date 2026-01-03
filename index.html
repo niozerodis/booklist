@@ -72,13 +72,18 @@
       /* 1. 卡片被拿起來時的樣式 (稍微傾斜 + 放大 + 陰影) */
       .sortable-drag {
         opacity: 1 !important;
-        background: #25262b; /* 確保背景不透明 */
+        background: #25262b;
         cursor: grabbing;
         box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5),
           0 10px 10px -5px rgba(0, 0, 0, 0.4);
-        transform: scale(1.02) rotate(2deg); /* 物理傾斜效果 */
-        z-index: 9999; /* 確保在最上層 */
+        transform: scale(1.02) rotate(2deg);
+        z-index: 9999;
+
+        /* ★★★ 新增：禁止在拖曳時選取卡片內的文字 ★★★ */
+        user-select: none;
+        -webkit-user-select: none; /* 支援 Safari */
       }
+
       /* 2. 原本位置留下的殘影樣式 */
       .sortable-ghost {
         opacity: 0.2;
@@ -88,6 +93,10 @@
       /* 3. 手把樣式 */
       .drag-handle {
         cursor: grab;
+
+        /* ★★★ 新增：手把本身也禁止選取，避免變藍色 ★★★ */
+        user-select: none;
+        -webkit-user-select: none;
       }
       .drag-handle:active {
         cursor: grabbing;
@@ -185,7 +194,7 @@
           >
             <div
               v-if="!isFiltering"
-              class="drag-handle absolute top-3 right-3 text-dark-600 hover:text-teal-400 p-2 z-20 transition-colors"
+              class="drag-handle select-none absolute top-3 right-3 text-dark-600 hover:text-teal-400 p-2 z-20 transition-colors"
               title="按住這裡拖曳排序"
             >
               <i class="fa-solid fa-grip-vertical text-lg"></i>
