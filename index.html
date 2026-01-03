@@ -56,10 +56,62 @@
       .modal-leave-to {
         opacity: 0;
       }
+
+      /* ★★★ 新增：狀態條動畫 ★★★ */
+      .toast-enter-active,
+      .toast-leave-active {
+        transition: all 0.3s ease;
+      }
+      .toast-enter-from,
+      .toast-leave-to {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      /* ★★★ 新增：拖曳物理效果優化 ★★★ */
+      /* 1. 卡片被拿起來時的樣式 (稍微傾斜 + 放大 + 陰影) */
+      .sortable-drag {
+        opacity: 1 !important;
+        background: #25262b; /* 確保背景不透明 */
+        cursor: grabbing;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5),
+          0 10px 10px -5px rgba(0, 0, 0, 0.4);
+        transform: scale(1.02) rotate(2deg); /* 物理傾斜效果 */
+        z-index: 9999; /* 確保在最上層 */
+      }
+      /* 2. 原本位置留下的殘影樣式 */
+      .sortable-ghost {
+        opacity: 0.2;
+        background: #2c2e33;
+        border: 2px dashed #4dabf7;
+      }
+      /* 3. 手把樣式 */
+      .drag-handle {
+        cursor: grab;
+      }
+      .drag-handle:active {
+        cursor: grabbing;
+      }
     </style>
   </head>
   <body>
-    <div id="app" class="min-h-screen pb-20">
+    <div id="app" class="min-h-screen pb-20 relative">
+      <transition name="toast">
+        <div
+          v-if="isLoading || isSaving"
+          class="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-5 py-3 rounded-lg shadow-2xl border border-dark-600 bg-dark-800 text-white"
+        >
+          <div v-if="isLoading" class="flex items-center text-teal-400">
+            <i class="fa-solid fa-circle-notch fa-spin mr-2 text-xl"></i>
+            <span class="font-bold tracking-wide">讀取資料中...</span>
+          </div>
+          <div v-if="isSaving" class="flex items-center text-green-400">
+            <i class="fa-solid fa-cloud-arrow-up fa-fade mr-2 text-xl"></i>
+            <span class="font-bold tracking-wide">儲存順序中...</span>
+          </div>
+        </div>
+      </transition>
+
       <nav
         class="bg-dark-800 border-b border-dark-600 sticky top-0 z-40 shadow-lg"
       >
@@ -114,10 +166,17 @@
         </div>
 
         <div
+          v-if="isFiltering"
+          class="mb-4 text-center text-sm text-yellow-500 bg-yellow-900/20 py-2 rounded-lg border border-yellow-900/50"
+        >
+          <i class="fa-solid fa-info-circle"></i>
+          搜尋或篩選模式下無法排序，請切換回「全部」來使用拖曳手把。
+        </div>
+
+        <div
           ref="bookListRef"
           v-if="filteredItems.length > 0"
           class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
-          :class="{ 'cursor-move': !isFiltering, 'cursor-default': isFiltering }"
         >
           <div
             v-for="book in filteredItems"
@@ -125,16 +184,27 @@
             class="bg-dark-800 rounded-xl border border-dark-700 p-5 hover:border-teal-500/50 transition-all duration-300 shadow-lg relative group"
           >
             <div
+              v-if="!isFiltering"
+              class="drag-handle absolute top-3 right-3 text-dark-600 hover:text-teal-400 p-2 z-20 transition-colors"
+              title="按住這裡拖曳排序"
+            >
+              <i class="fa-solid fa-grip-vertical text-lg"></i>
+            </div>
+
+            <div
               v-if="book.isFinished === 'Y'"
               class="absolute -top-2 -right-2 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md z-10 transform rotate-12"
             >
               FIN.
             </div>
 
-            <div class="flex justify-between items-start mb-3">
-              <h3 class="text-lg font-bold text-white leading-tight pr-6">
+            <div class="flex justify-between items-start mb-3 pr-8">
+              <h3 class="text-lg font-bold text-white leading-tight">
                 {{ book.title }}
               </h3>
+            </div>
+
+            <div class="flex items-center mb-3">
               <span
                 :class="book.status === '已購買' ? 'bg-teal-500/20 text-teal-300 border-teal-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'"
                 class="px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap"
@@ -421,7 +491,8 @@
 
       createApp({
         setup() {
-          const API_URL = "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
+          const API_URL =
+            "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
 
           const items = ref([]);
           const searchQuery = ref("");
@@ -430,10 +501,9 @@
           const isSaving = ref(false);
           const showModal = ref(false);
           const isEditing = ref(false);
-          const bookListRef = ref(null); // ★ 新增：綁定 DOM 元素
-          let sortableInstance = null; // ★ 新增：Sortable 實體
+          const bookListRef = ref(null);
+          let sortableInstance = null;
 
-          // 表單預設值
           const defaultForm = {
             id: "",
             title: "",
@@ -447,12 +517,10 @@
           };
           const form = ref({ ...defaultForm });
 
-          // 判斷是否正在篩選 (搜尋或過濾狀態下，禁止拖曳)
           const isFiltering = computed(() => {
             return searchQuery.value !== "" || filterStatus.value !== "ALL";
           });
 
-          // 讀取資料
           const fetchData = async () => {
             isLoading.value = true;
             try {
@@ -466,7 +534,6 @@
             }
           };
 
-          // 儲存資料 (同步到 Google Sheet)
           const syncToCloud = async () => {
             isSaving.value = true;
             try {
@@ -477,11 +544,13 @@
             } catch (e) {
               alert("儲存失敗！");
             } finally {
-              isSaving.value = false;
+              // 延遲關閉，讓使用者清楚看到狀態條
+              setTimeout(() => {
+                isSaving.value = false;
+              }, 1000);
             }
           };
 
-          // 篩選邏輯
           const filteredItems = computed(() => {
             let result = items.value;
             if (searchQuery.value) {
@@ -499,38 +568,34 @@
             return result;
           });
 
-          // ★ 初始化拖曳功能
+          // ★★★ 優化後的 Sortable 設定 ★★★
           const initSortable = () => {
             if (bookListRef.value) {
               sortableInstance = new Sortable(bookListRef.value, {
-                animation: 150,
-                ghostClass: "opacity-50", // 拖曳時原本位置變半透明
-                disabled: isFiltering.value, // 如果在篩選中，禁止拖曳
+                animation: 200, // 動畫速度
+                handle: ".drag-handle", // ★ 關鍵：只允許抓手把
+                ghostClass: "sortable-ghost", // 預覽空位樣式
+                dragClass: "sortable-drag", // 拖曳中樣式
+                forceFallback: true, // ★ 關鍵：強制使用複製品，解決 Grid 亂跳
+                fallbackOnBody: true, // 確保複製品在最上層
+                disabled: isFiltering.value,
 
-                // ★ 當拖曳結束時
                 onEnd: (evt) => {
-                  // 如果在篩選中，不執行排序 (安全機制)
                   if (isFiltering.value) return;
-
-                  // 1. 移動陣列中的資料
                   const item = items.value.splice(evt.oldIndex, 1)[0];
                   items.value.splice(evt.newIndex, 0, item);
-
-                  // 2. 觸發存檔
                   syncToCloud();
                 },
               });
             }
           };
 
-          // 監聽篩選狀態，動態開關拖曳功能
           watch(isFiltering, (newVal) => {
             if (sortableInstance) {
               sortableInstance.option("disabled", newVal);
             }
           });
 
-          // Modal 操作
           const openModal = () => {
             isEditing.value = false;
             form.value = { ...defaultForm, id: Date.now() };
@@ -550,7 +615,6 @@
               const idx = items.value.findIndex((i) => i.id === form.value.id);
               if (idx !== -1) items.value[idx] = { ...form.value };
             } else {
-              // 新書加在最上面
               items.value.unshift({ ...form.value });
             }
             closeModal();
@@ -566,7 +630,6 @@
 
           onMounted(async () => {
             await fetchData();
-            // 確保 DOM 渲染完畢後再掛載 Sortable
             nextTick(() => {
               initSortable();
             });
@@ -583,7 +646,7 @@
             form,
             filteredItems,
             isFiltering,
-            bookListRef, // 回傳給 template 使用
+            bookListRef,
             openModal,
             closeModal,
             saveItem,
