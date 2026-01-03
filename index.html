@@ -34,6 +34,7 @@
         color: #c1c2c5;
         font-family: "Segoe UI", Microsoft JhengHei, sans-serif;
       }
+      /* 自定義捲軸 */
       ::-webkit-scrollbar {
         width: 8px;
       }
@@ -44,58 +45,21 @@
         background: #373a40;
         border-radius: 4px;
       }
-
-      /* ★ 拖曳專用樣式 ★ */
-      .sortable-ghost {
-        opacity: 0.2;
-        background: #2c2e33;
-        border: 2px dashed #4dabf7;
+      ::-webkit-scrollbar-thumb:hover {
+        background: #4dabf7;
       }
-      .sortable-drag {
-        cursor: grabbing;
-        opacity: 1 !important;
-        background: #25262b;
-        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5),
-          0 10px 10px -5px rgba(0, 0, 0, 0.4);
-        transform: scale(1.02) rotate(2deg); /* 拿起時稍微轉一點角度 */
+      .modal-enter-active,
+      .modal-leave-active {
+        transition: opacity 0.3s ease;
       }
-      .drag-handle {
-        cursor: grab;
-      }
-      .drag-handle:active {
-        cursor: grabbing;
-      }
-
-      /* 狀態通知動畫 */
-      .toast-enter-active,
-      .toast-leave-active {
-        transition: all 0.3s ease;
-      }
-      .toast-enter-from,
-      .toast-leave-to {
+      .modal-enter-from,
+      .modal-leave-to {
         opacity: 0;
-        transform: translateY(20px);
       }
     </style>
   </head>
   <body>
-    <div id="app" class="min-h-screen pb-20 relative">
-      <transition name="toast">
-        <div
-          v-if="isLoading || isSaving"
-          class="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-2xl border border-dark-600 bg-dark-800 text-white"
-        >
-          <div v-if="isLoading" class="flex items-center text-teal-400">
-            <i class="fa-solid fa-circle-notch fa-spin mr-2 text-xl"></i>
-            <span class="font-bold">讀取資料中...</span>
-          </div>
-          <div v-if="isSaving" class="flex items-center text-green-400">
-            <i class="fa-solid fa-cloud-arrow-up fa-fade mr-2 text-xl"></i>
-            <span class="font-bold">正在儲存順序...</span>
-          </div>
-        </div>
-      </transition>
-
+    <div id="app" class="min-h-screen pb-20">
       <nav
         class="bg-dark-800 border-b border-dark-600 sticky top-0 z-40 shadow-lg"
       >
@@ -103,13 +67,24 @@
           <div class="flex justify-between h-16 items-center">
             <div class="flex items-center gap-3">
               <i class="fa-solid fa-book-bookmark text-teal-400 text-2xl"></i>
-              <h1 class="text-xl font-bold text-gray-100">我的藏書閣</h1>
+              <div>
+                <h1 class="text-xl font-bold text-gray-100">我的藏書閣</h1>
+                <div class="flex items-center text-xs gap-2">
+                  <span v-if="isLoading" class="text-teal-400"
+                    ><i class="fa-solid fa-circle-notch fa-spin"></i>
+                    同步中...</span
+                  >
+                  <span v-else class="text-gray-500"
+                    >共 {{ items.length }} 本收藏</span
+                  >
+                </div>
+              </div>
             </div>
             <button
               @click="openModal()"
-              class="bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-md flex items-center"
+              class="bg-teal-600 hover:bg-teal-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition shadow-md shadow-teal-900/50 flex items-center"
             >
-              <i class="fa-solid fa-plus mr-2"></i> 新增
+              <i class="fa-solid fa-plus mr-2"></i> 新增書籍
             </button>
           </div>
         </div>
@@ -124,13 +99,13 @@
             <input
               v-model="searchQuery"
               type="text"
-              placeholder="搜尋書名..."
-              class="w-full bg-dark-800 border border-dark-600 text-gray-200 pl-10 pr-4 py-2.5 rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
+              placeholder="搜尋書名、作者或出版社..."
+              class="w-full bg-dark-800 border border-dark-600 text-gray-200 pl-10 pr-4 py-2.5 rounded-xl focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition"
             />
           </div>
           <select
             v-model="filterStatus"
-            class="bg-dark-800 border border-dark-600 text-gray-200 px-4 py-2 rounded-xl outline-none"
+            class="bg-dark-800 border border-dark-600 text-gray-200 px-4 py-2 rounded-xl outline-none focus:ring-2 focus:ring-teal-500"
           >
             <option value="ALL">全部狀況</option>
             <option value="已購買">已購買</option>
@@ -139,95 +114,92 @@
         </div>
 
         <div
-          v-if="isFiltering"
-          class="mb-4 text-center text-sm text-yellow-500 bg-yellow-900/20 py-2 rounded-lg border border-yellow-900/50"
-        >
-          <i class="fa-solid fa-info-circle"></i>
-          搜尋或篩選模式下無法排序，請切換回「全部」來拖曳。
-        </div>
-
-        <div
           ref="bookListRef"
           v-if="filteredItems.length > 0"
           class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+          :class="{ 'cursor-move': !isFiltering, 'cursor-default': isFiltering }"
         >
           <div
             v-for="book in filteredItems"
             :key="book.id"
-            :data-id="book.id"
-            class="bg-dark-800 rounded-xl border border-dark-700 p-5 shadow-lg relative group transition-all"
+            class="bg-dark-800 rounded-xl border border-dark-700 p-5 hover:border-teal-500/50 transition-all duration-300 shadow-lg relative group"
           >
             <div
-              v-if="!isFiltering"
-              class="drag-handle absolute top-3 right-3 text-dark-600 hover:text-teal-400 p-2 cursor-grab transition-colors z-20"
-              title="按住我拖曳排序"
-            >
-              <i class="fa-solid fa-grip-vertical text-xl"></i>
-            </div>
-
-            <div
               v-if="book.isFinished === 'Y'"
-              class="absolute -top-2 -left-2 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md z-10 rotate-[-12deg]"
+              class="absolute -top-2 -right-2 bg-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full shadow-md z-10 transform rotate-12"
             >
               FIN.
             </div>
 
-            <div class="flex justify-between items-start mb-3 pr-8">
-              <h3 class="text-lg font-bold text-white leading-tight">
+            <div class="flex justify-between items-start mb-3">
+              <h3 class="text-lg font-bold text-white leading-tight pr-6">
                 {{ book.title }}
               </h3>
+              <span
+                :class="book.status === '已購買' ? 'bg-teal-500/20 text-teal-300 border-teal-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'"
+                class="px-2 py-1 rounded-md text-xs font-medium border whitespace-nowrap"
+              >
+                {{ book.status }}
+              </span>
             </div>
 
             <div class="space-y-2 text-sm text-gray-400">
               <div class="flex items-center gap-2">
+                <i
+                  class="fa-solid fa-user-pen w-4 text-center text-gray-500"
+                ></i>
                 <span class="text-gray-300">{{ book.author }}</span>
-                <span class="text-xs bg-dark-700 px-2 py-0.5 rounded"
-                  >{{ book.publisher }}</span
-                >
               </div>
-
+              <div class="flex items-center gap-2">
+                <i
+                  class="fa-solid fa-building w-4 text-center text-gray-500"
+                ></i>
+                <span>{{ book.publisher }}</span>
+                <span class="text-gray-600">|</span>
+                <span>{{ book.pubDate }}</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <i
+                  class="fa-solid fa-layer-group w-4 text-center text-gray-500"
+                ></i>
+                <span>{{ book.version }}</span>
+              </div>
               <div
-                class="flex items-center justify-between mt-3 pt-3 border-t border-dark-600"
+                class="flex items-center gap-2 mt-2 pt-2 border-t border-dark-600"
               >
-                <div class="text-xs">
-                  <span
-                    v-if="book.platform === 'Bookwalker'"
-                    class="text-blue-400 font-bold"
-                    ><i class="fa-solid fa-mobile-screen"></i> BW</span
-                  >
-                  <span
-                    v-else-if="book.platform === '實體'"
-                    class="text-orange-400 font-bold"
-                    ><i class="fa-solid fa-book-open"></i> 實體</span
-                  >
-                  <span
-                    v-else
-                    class="text-gray-600 border border-dashed border-gray-600 px-1 rounded"
-                    >未設定</span
-                  >
-                </div>
-
                 <span
-                  :class="book.status === '已購買' ? 'text-teal-400' : 'text-red-400'"
-                  class="font-bold text-xs"
+                  v-if="book.platform === 'Bookwalker'"
+                  class="text-blue-400 font-bold"
                 >
-                  {{ book.status }}
+                  <i class="fa-solid fa-mobile-screen"></i> BW電子書
+                </span>
+                <span
+                  v-else-if="book.platform === '實體'"
+                  class="text-orange-400 font-bold"
+                >
+                  <i class="fa-solid fa-book-open"></i> 實體書
+                </span>
+                <span
+                  v-else
+                  class="text-gray-600 font-bold text-xs border border-dashed border-gray-600 px-2 py-0.5 rounded"
+                >
+                  <i class="fa-solid fa-question"></i> 未設定平台
                 </span>
               </div>
             </div>
 
             <div
-              class="absolute bottom-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              class="absolute bottom-4 right-4 flex gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity"
             >
               <button
                 @click="editItem(book)"
-                class="text-gray-400 hover:text-white px-2"
+                class="p-2 bg-dark-600 hover:bg-teal-600 text-white rounded-lg transition shadow"
               >
                 <i class="fa-solid fa-pen"></i>
               </button>
               <button
                 @click="deleteItem(book.id)"
-                class="text-gray-400 hover:text-red-400 px-2"
+                class="p-2 bg-dark-600 hover:bg-red-600 text-white rounded-lg transition shadow"
               >
                 <i class="fa-solid fa-trash"></i>
               </button>
@@ -235,9 +207,9 @@
           </div>
         </div>
 
-        <div v-else-if="!isLoading" class="text-center py-20 text-dark-600">
+        <div v-else class="text-center py-20 text-dark-600">
           <i class="fa-solid fa-book-open text-6xl mb-4 opacity-20"></i>
-          <p>沒有找到書籍</p>
+          <p>找不到這本書，或是書櫃是空的...</p>
         </div>
       </div>
 
@@ -247,113 +219,195 @@
           class="fixed inset-0 z-50 overflow-y-auto bg-black bg-opacity-80 backdrop-blur-sm flex items-center justify-center p-4"
         >
           <div
-            class="bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg border border-dark-600 p-6"
+            class="bg-dark-800 rounded-2xl shadow-2xl w-full max-w-lg border border-dark-600"
           >
-            <h3 class="text-lg font-bold text-white mb-4">
-              {{ isEditing ? '編輯書籍' : '登錄新書' }}
-            </h3>
-            <form @submit.prevent="saveItem" class="space-y-4">
-              <input
-                v-model="form.title"
-                required
-                placeholder="書名"
-                type="text"
-                class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white outline-none focus:border-teal-500"
-              />
-              <input
-                v-model="form.author"
-                placeholder="作者"
-                type="text"
-                class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white outline-none focus:border-teal-500"
-              />
-              <div class="grid grid-cols-2 gap-4">
-                <select
-                  v-model="form.publisher"
-                  class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white outline-none"
+            <div
+              class="px-6 py-4 border-b border-dark-600 flex justify-between items-center"
+            >
+              <h3 class="text-lg font-bold text-white">
+                {{ isEditing ? '編輯書籍' : '登錄新書' }}
+              </h3>
+              <button
+                @click="closeModal"
+                class="text-gray-500 hover:text-white"
+              >
+                <i class="fa-solid fa-times text-xl"></i>
+              </button>
+            </div>
+
+            <form @submit.prevent="saveItem" class="p-6 space-y-4">
+              <div>
+                <label
+                  class="block text-xs font-bold text-gray-500 uppercase mb-1"
+                  >書籍名稱</label
                 >
-                  <option>台灣角川</option>
-                  <option>東立</option>
-                  <option>尖端</option>
-                  <option>青文</option>
-                  <option>長鴻</option>
-                  <option>平心</option>
-                  <option>其他</option>
-                </select>
                 <input
-                  v-model="form.pubDate"
-                  type="date"
-                  class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white outline-none"
+                  v-model="form.title"
+                  required
+                  type="text"
+                  class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white focus:border-teal-500 outline-none"
                 />
               </div>
-              <div class="grid grid-cols-2 gap-4">
-                <div
-                  class="bg-dark-900 p-2 rounded border border-dark-600 flex justify-center gap-2"
+              <div>
+                <label
+                  class="block text-xs font-bold text-gray-500 uppercase mb-1"
+                  >作者</label
                 >
-                  <label
-                    ><input
-                      type="radio"
-                      value="已購買"
-                      v-model="form.status"
-                      class="mr-1"
-                    />已購</label
-                  >
-                  <label
-                    ><input
-                      type="radio"
-                      value="未購買"
-                      v-model="form.status"
-                      class="mr-1"
-                    />未購</label
-                  >
-                </div>
-                <div
-                  class="bg-dark-900 p-2 rounded border border-dark-600 flex justify-center gap-2"
-                >
-                  <label
-                    ><input
-                      type="radio"
-                      value="實體"
-                      v-model="form.platform"
-                      class="mr-1"
-                    />實體</label
-                  >
-                  <label
-                    ><input
-                      type="radio"
-                      value="Bookwalker"
-                      v-model="form.platform"
-                      class="mr-1"
-                    />BW</label
-                  >
-                </div>
-              </div>
-              <div class="grid grid-cols-2 gap-4">
                 <input
-                  v-model="form.version"
-                  placeholder="集數/版本"
-                  class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white outline-none"
+                  v-model="form.author"
+                  type="text"
+                  class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white focus:border-teal-500 outline-none"
                 />
-                <select
-                  v-model="form.isFinished"
-                  class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white outline-none"
-                >
-                  <option value="N">連載中</option>
-                  <option value="Y">已完結</option>
-                </select>
               </div>
-              <div class="flex justify-end gap-3 mt-4">
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    class="block text-xs font-bold text-gray-500 uppercase mb-1"
+                    >出版社</label
+                  >
+                  <select
+                    v-model="form.publisher"
+                    class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white focus:border-teal-500 outline-none appearance-none"
+                  >
+                    <option value="" disabled>請選擇</option>
+                    <option>台灣角川</option>
+                    <option>東立</option>
+                    <option>尖端</option>
+                    <option>青文</option>
+                    <option>長鴻</option>
+                    <option>四季</option>
+                    <option>平心</option>
+                    <option>威向</option>
+                    <option>其他</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    class="block text-xs font-bold text-gray-500 uppercase mb-1"
+                    >出版日期</label
+                  >
+                  <input
+                    v-model="form.pubDate"
+                    type="date"
+                    class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white focus:border-teal-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label
+                    class="block text-xs font-bold text-gray-500 uppercase mb-1"
+                    >版本/集數</label
+                  >
+                  <input
+                    v-model="form.version"
+                    placeholder="例如：第1集、特裝版"
+                    type="text"
+                    class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white focus:border-teal-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label
+                    class="block text-xs font-bold text-gray-500 uppercase mb-1"
+                    >是否完結</label
+                  >
+                  <select
+                    v-model="form.isFinished"
+                    class="w-full bg-dark-900 border border-dark-600 rounded-lg p-2.5 text-white focus:border-teal-500 outline-none"
+                  >
+                    <option value="N">連載中 (N)</option>
+                    <option value="Y">已完結 (Y)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 pt-2">
+                <div class="bg-dark-900 p-3 rounded-lg border border-dark-600">
+                  <label
+                    class="block text-xs font-bold text-gray-500 uppercase mb-2"
+                    >購買狀況</label
+                  >
+                  <div class="flex gap-2">
+                    <label class="cursor-pointer">
+                      <input
+                        type="radio"
+                        value="已購買"
+                        v-model="form.status"
+                        class="peer sr-only"
+                      />
+                      <span
+                        class="px-3 py-1 rounded text-xs border border-dark-600 text-gray-400 peer-checked:bg-teal-600 peer-checked:text-white peer-checked:border-teal-600 transition"
+                        >已購</span
+                      >
+                    </label>
+                    <label class="cursor-pointer">
+                      <input
+                        type="radio"
+                        value="未購買"
+                        v-model="form.status"
+                        class="peer sr-only"
+                      />
+                      <span
+                        class="px-3 py-1 rounded text-xs border border-dark-600 text-gray-400 peer-checked:bg-red-600 peer-checked:text-white peer-checked:border-red-600 transition"
+                        >未購</span
+                      >
+                    </label>
+                  </div>
+                </div>
+                <div class="bg-dark-900 p-3 rounded-lg border border-dark-600">
+                  <label
+                    class="block text-xs font-bold text-gray-500 uppercase mb-2"
+                    >平台</label
+                  >
+                  <div class="flex gap-2">
+                    <label class="cursor-pointer">
+                      <input
+                        type="radio"
+                        value="實體"
+                        v-model="form.platform"
+                        class="peer sr-only"
+                      />
+                      <span
+                        class="px-3 py-1 rounded text-xs border border-dark-600 text-gray-400 peer-checked:bg-orange-600 peer-checked:text-white transition"
+                        >實體</span
+                      >
+                    </label>
+                    <label class="cursor-pointer">
+                      <input
+                        type="radio"
+                        value="Bookwalker"
+                        v-model="form.platform"
+                        class="peer sr-only"
+                      />
+                      <span
+                        class="px-3 py-1 rounded text-xs border border-dark-600 text-gray-400 peer-checked:bg-blue-600 peer-checked:text-white transition"
+                        >BW</span
+                      >
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="pt-4 flex justify-end gap-3">
                 <button
                   type="button"
                   @click="closeModal"
-                  class="px-4 py-2 text-gray-400"
+                  class="px-4 py-2 text-gray-400 hover:text-white transition"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
-                  class="px-6 py-2 bg-teal-600 text-white rounded-lg font-bold"
+                  :disabled="isSaving"
+                  class="px-6 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold shadow-lg shadow-teal-900/50 transition flex items-center"
                 >
-                  確認
+                  <span v-if="isSaving"
+                    ><i class="fa-solid fa-spinner fa-spin mr-2"></i>
+                    處理中</span
+                  >
+                  <span v-else>{{ isEditing ? '更新資料' : '確認登錄' }}</span>
                 </button>
               </div>
             </form>
@@ -367,7 +421,6 @@
 
       createApp({
         setup() {
-          // ★ 請記得換回你的網址 ★
           const API_URL = "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
 
           const items = ref([]);
@@ -377,9 +430,10 @@
           const isSaving = ref(false);
           const showModal = ref(false);
           const isEditing = ref(false);
-          const bookListRef = ref(null);
-          let sortableInstance = null;
+          const bookListRef = ref(null); // ★ 新增：綁定 DOM 元素
+          let sortableInstance = null; // ★ 新增：Sortable 實體
 
+          // 表單預設值
           const defaultForm = {
             id: "",
             title: "",
@@ -393,39 +447,41 @@
           };
           const form = ref({ ...defaultForm });
 
-          const isFiltering = computed(
-            () => searchQuery.value !== "" || filterStatus.value !== "ALL"
-          );
+          // 判斷是否正在篩選 (搜尋或過濾狀態下，禁止拖曳)
+          const isFiltering = computed(() => {
+            return searchQuery.value !== "" || filterStatus.value !== "ALL";
+          });
 
+          // 讀取資料
           const fetchData = async () => {
             isLoading.value = true;
             try {
               const res = await fetch(API_URL);
               items.value = await res.json();
             } catch (e) {
+              alert("讀取失敗");
               console.error(e);
             } finally {
               isLoading.value = false;
             }
           };
 
+          // 儲存資料 (同步到 Google Sheet)
           const syncToCloud = async () => {
-            isSaving.value = true; // ★ 這會觸發右下角的通知
+            isSaving.value = true;
             try {
               await fetch(API_URL, {
                 method: "POST",
                 body: JSON.stringify(items.value),
               });
             } catch (e) {
-              alert("儲存失敗");
+              alert("儲存失敗！");
             } finally {
-              // 延遲一點點關閉，讓你看到「儲存中」的文字
-              setTimeout(() => {
-                isSaving.value = false;
-              }, 1000);
+              isSaving.value = false;
             }
           };
 
+          // 篩選邏輯
           const filteredItems = computed(() => {
             let result = items.value;
             if (searchQuery.value) {
@@ -433,50 +489,60 @@
               result = result.filter(
                 (i) =>
                   i.title.toLowerCase().includes(q) ||
-                  i.author.toLowerCase().includes(q)
+                  i.author.toLowerCase().includes(q) ||
+                  i.publisher.toLowerCase().includes(q)
               );
             }
-            if (filterStatus.value !== "ALL")
+            if (filterStatus.value !== "ALL") {
               result = result.filter((i) => i.status === filterStatus.value);
+            }
             return result;
           });
 
-          // ★ 修正後的拖曳設定 ★
+          // ★ 初始化拖曳功能
           const initSortable = () => {
             if (bookListRef.value) {
               sortableInstance = new Sortable(bookListRef.value, {
-                animation: 200, // 動畫速度
-                handle: ".drag-handle", // ★ 只允許抓這個 class 拖曳
-                ghostClass: "sortable-ghost", // 預覽空位的樣式
-                dragClass: "sortable-drag", // 正在拖的那張卡的樣式
-                forceFallback: true, // ★ 關鍵：強制使用複製體拖曳，解決 Grid 亂跳問題
-                fallbackOnBody: true, // 確保拖曳層級最高
-                disabled: isFiltering.value,
+                animation: 150,
+                ghostClass: "opacity-50", // 拖曳時原本位置變半透明
+                disabled: isFiltering.value, // 如果在篩選中，禁止拖曳
 
+                // ★ 當拖曳結束時
                 onEnd: (evt) => {
+                  // 如果在篩選中，不執行排序 (安全機制)
                   if (isFiltering.value) return;
+
+                  // 1. 移動陣列中的資料
                   const item = items.value.splice(evt.oldIndex, 1)[0];
                   items.value.splice(evt.newIndex, 0, item);
+
+                  // 2. 觸發存檔
                   syncToCloud();
                 },
               });
             }
           };
 
+          // 監聽篩選狀態，動態開關拖曳功能
           watch(isFiltering, (newVal) => {
-            if (sortableInstance) sortableInstance.option("disabled", newVal);
+            if (sortableInstance) {
+              sortableInstance.option("disabled", newVal);
+            }
           });
 
+          // Modal 操作
           const openModal = () => {
             isEditing.value = false;
             form.value = { ...defaultForm, id: Date.now() };
             showModal.value = true;
           };
+
           const editItem = (item) => {
             isEditing.value = true;
             form.value = { ...item };
             showModal.value = true;
           };
+
           const closeModal = () => (showModal.value = false);
 
           const saveItem = async () => {
@@ -484,6 +550,7 @@
               const idx = items.value.findIndex((i) => i.id === form.value.id);
               if (idx !== -1) items.value[idx] = { ...form.value };
             } else {
+              // 新書加在最上面
               items.value.unshift({ ...form.value });
             }
             closeModal();
@@ -491,7 +558,7 @@
           };
 
           const deleteItem = async (id) => {
-            if (confirm("刪除？")) {
+            if (confirm("確定要刪除嗎？")) {
               items.value = items.value.filter((i) => i.id !== id);
               await syncToCloud();
             }
@@ -499,6 +566,7 @@
 
           onMounted(async () => {
             await fetchData();
+            // 確保 DOM 渲染完畢後再掛載 Sortable
             nextTick(() => {
               initSortable();
             });
@@ -515,7 +583,7 @@
             form,
             filteredItems,
             isFiltering,
-            bookListRef,
+            bookListRef, // 回傳給 template 使用
             openModal,
             closeModal,
             saveItem,
