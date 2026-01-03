@@ -6,6 +6,7 @@
     <title>我的藏書閣</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
     <link
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
       rel="stylesheet"
@@ -113,9 +114,12 @@
         </div>
 
         <div
+          ref="bookListRef"
           v-if="filteredItems.length > 0"
           class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5"
+          :class="{ 'cursor-move': !isFiltering, 'cursor-default': isFiltering }"
         >
+          F
           <div
             v-for="book in filteredItems"
             :key="book.id"
@@ -414,13 +418,11 @@
     </div>
 
     <script>
-      const { createApp, ref, computed, onMounted } = Vue;
+      const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
 
       createApp({
         setup() {
-          // ★ 請替換成你的 Apps Script 網址 ★
-          const API_URL =
-            "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
+          const API_URL = "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
 
           const items = ref([]);
           const searchQuery = ref("");
@@ -429,13 +431,15 @@
           const isSaving = ref(false);
           const showModal = ref(false);
           const isEditing = ref(false);
+          const bookListRef = ref(null); // ★ 新增：綁定 DOM 元素
+          let sortableInstance = null; // ★ 新增：Sortable 實體
 
-          // 預設表單
+          // 表單預設值
           const defaultForm = {
             id: "",
             title: "",
             author: "",
-            publisher: "台灣角川", // 預設值
+            publisher: "台灣角川",
             pubDate: "",
             status: "未購買",
             platform: "實體",
@@ -444,22 +448,26 @@
           };
           const form = ref({ ...defaultForm });
 
+          // 判斷是否正在篩選 (搜尋或過濾狀態下，禁止拖曳)
+          const isFiltering = computed(() => {
+            return searchQuery.value !== "" || filterStatus.value !== "ALL";
+          });
+
           // 讀取資料
           const fetchData = async () => {
             isLoading.value = true;
             try {
               const res = await fetch(API_URL);
-              const data = await res.json();
-              items.value = data;
+              items.value = await res.json();
             } catch (e) {
-              alert("讀取失敗，請檢查網路或 API");
+              alert("讀取失敗");
               console.error(e);
             } finally {
               isLoading.value = false;
             }
           };
 
-          // 儲存資料
+          // 儲存資料 (同步到 Google Sheet)
           const syncToCloud = async () => {
             isSaving.value = true;
             try {
@@ -474,11 +482,9 @@
             }
           };
 
-          // 計算屬性
+          // 篩選邏輯
           const filteredItems = computed(() => {
             let result = items.value;
-
-            // 搜尋
             if (searchQuery.value) {
               const q = searchQuery.value.toLowerCase();
               result = result.filter(
@@ -488,16 +494,44 @@
                   i.publisher.toLowerCase().includes(q)
               );
             }
-
-            // 過濾狀況
             if (filterStatus.value !== "ALL") {
               result = result.filter((i) => i.status === filterStatus.value);
             }
-
             return result;
           });
 
-          // 動作
+          // ★ 初始化拖曳功能
+          const initSortable = () => {
+            if (bookListRef.value) {
+              sortableInstance = new Sortable(bookListRef.value, {
+                animation: 150,
+                ghostClass: "opacity-50", // 拖曳時原本位置變半透明
+                disabled: isFiltering.value, // 如果在篩選中，禁止拖曳
+
+                // ★ 當拖曳結束時
+                onEnd: (evt) => {
+                  // 如果在篩選中，不執行排序 (安全機制)
+                  if (isFiltering.value) return;
+
+                  // 1. 移動陣列中的資料
+                  const item = items.value.splice(evt.oldIndex, 1)[0];
+                  items.value.splice(evt.newIndex, 0, item);
+
+                  // 2. 觸發存檔
+                  syncToCloud();
+                },
+              });
+            }
+          };
+
+          // 監聽篩選狀態，動態開關拖曳功能
+          watch(isFiltering, (newVal) => {
+            if (sortableInstance) {
+              sortableInstance.option("disabled", newVal);
+            }
+          });
+
+          // Modal 操作
           const openModal = () => {
             isEditing.value = false;
             form.value = { ...defaultForm, id: Date.now() };
@@ -517,6 +551,7 @@
               const idx = items.value.findIndex((i) => i.id === form.value.id);
               if (idx !== -1) items.value[idx] = { ...form.value };
             } else {
+              // 新書加在最上面
               items.value.unshift({ ...form.value });
             }
             closeModal();
@@ -524,13 +559,19 @@
           };
 
           const deleteItem = async (id) => {
-            if (confirm("確定要將這本書移出書單嗎？")) {
+            if (confirm("確定要刪除嗎？")) {
               items.value = items.value.filter((i) => i.id !== id);
               await syncToCloud();
             }
           };
 
-          onMounted(() => fetchData());
+          onMounted(async () => {
+            await fetchData();
+            // 確保 DOM 渲染完畢後再掛載 Sortable
+            nextTick(() => {
+              initSortable();
+            });
+          });
 
           return {
             items,
@@ -542,6 +583,8 @@
             isEditing,
             form,
             filteredItems,
+            isFiltering,
+            bookListRef, // 回傳給 template 使用
             openModal,
             closeModal,
             saveItem,
