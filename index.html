@@ -167,11 +167,21 @@
                 <span
                   v-if="book.platform === 'bookwalker'"
                   class="text-blue-400 font-bold"
-                  ><i class="fa-solid fa-mobile-screen"></i> BW電子書</span
                 >
-                <span v-else class="text-orange-400 font-bold"
-                  ><i class="fa-solid fa-book-open"></i> 實體書</span
+                  <i class="fa-solid fa-mobile-screen"></i> BW電子書
+                </span>
+                <span
+                  v-else-if="book.platform === '實體'"
+                  class="text-orange-400 font-bold"
                 >
+                  <i class="fa-solid fa-book-open"></i> 實體書
+                </span>
+                <span
+                  v-else
+                  class="text-gray-600 font-bold text-xs border border-dashed border-gray-600 px-2 py-0.5 rounded"
+                >
+                  <i class="fa-solid fa-question"></i> 未設定平台
+                </span>
               </div>
             </div>
 
@@ -409,7 +419,8 @@
       createApp({
         setup() {
           // ★ 請替換成你的 Apps Script 網址 ★
-          const API_URL = "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
+          const API_URL =
+            "https://script.google.com/macros/s/AKfycbx48Kfx_s2w30bJgrwZEpcl_cgq3Egr9CAIDkDSElQigxtK08j5cAAXxymvQaJXCClz/exec";
 
           const items = ref([]);
           const searchQuery = ref("");
